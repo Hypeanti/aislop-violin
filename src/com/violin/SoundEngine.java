@@ -46,7 +46,7 @@ public class SoundEngine {
         reverbBuffer = new double[8820]; // ~200ms at 44100Hz
         reverbWritePos = 0;
         initializeAudio();
-        System.out.println("🔥 SoundEngine initialized - prepare for auditory suffering 🔥");
+        System.out.println("SoundEngine initialized - prepare for auditory suffering");
     }
 
     private void initializeAudio() {
@@ -263,34 +263,34 @@ public class SoundEngine {
             }
         }
         activeNotes.clear();
-        System.out.println("🛑 PANIC! All notes stopped 🛑");
+        System.out.println("PANIC! All notes stopped");
     }
 
     // setters for all the knobs (called by GUI)
     public void setVolume(double vol) {
         this.volume = Math.max(0, Math.min(1, vol));
-        System.out.println("🔊 Volume set to " + (int) (volume * 100) + "%");
+        System.out.println("Volume set to " + (int) (volume * 100) + "%");
     }
 
     public void setSustain(double sus) {
         this.sustain = Math.max(0, Math.min(1, sus));
-        System.out.println("🎵 Sustain set to " + (int) (sustain * 100) + "%");
+        System.out.println("Sustain set to " + (int) (sustain * 100) + "%");
     }
 
     public void setReverb(double rev) {
         this.reverb = Math.max(0, Math.min(1, rev));
-        System.out.println("🌀 Reverb set to " + (int) (reverb * 100) + "%");
+        System.out.println("Reverb set to " + (int) (reverb * 100) + "%");
     }
 
     public void setBitcrush(double crush) {
         this.bitcrush = Math.max(0, Math.min(1, crush));
-        System.out.println("❓ Bitcrush set to " + (int) (bitcrush * 100) + "% (your ears are bleeding now)");
+        System.out.println("Bitcrush set to " + (int) (bitcrush * 100) + "% (your ears are bleeding now)");
     }
 
     public void setStringTuning(int string, double offset) {
         if (string >= 0 && string < 4) {
             tuningOffsets[string] = offset;
-            System.out.println("🎻 String " + (string + 1) + " tuned to " + (offset > 0 ? "+" : "") + offset
+            System.out.println("String " + (string + 1) + " tuned to " + (offset > 0 ? "+" : "") + offset
                     + " semitones of horror");
         }
     }

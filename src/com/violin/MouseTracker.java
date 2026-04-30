@@ -23,22 +23,26 @@ public class MouseTracker {
         Thread inputThread = new Thread(() -> {
             Scanner sc = new Scanner(System.in);
 
-            while (true) {
+            try {
+                while (true) {
 
-                //pauses when you press enter
-                String input = sc.nextLine();
+                    //pauses when you press enter
+                    String input = sc.nextLine();
 
-                //stops the program when you type exit
-                if (input.equalsIgnoreCase("exit")) {
-                    System.out.println("EXIT");
-                    System.exit(0);
+                    //stops the program when you type exit
+                    if (input.equalsIgnoreCase("exit")) {
+                        System.out.println("EXIT");
+                        System.exit(0);
+                    }
+
+                    //ts runs when you press enter, acts like a switch
+                    running = !running;
+
+                    //read it dawg, started or stopped
+                    System.out.println(running ? "Started" : "Stopped");
                 }
-
-                //ts runs when you press enter, acts like a switch
-                running = !running;
-
-                //read it dawg, started or stopped
-                System.out.println(running ? "Started" : "Stopped");
+            } finally {
+                sc.close();
             }
         });
 
