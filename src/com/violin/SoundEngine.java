@@ -61,28 +61,31 @@ public class SoundEngine {
     }
 
     // plays a note - lines 55-90 are mostly me
+    private long lastPlayTime = 0;
+    private static final int MIN_PLAY_INTERVAL_MS = 20; // 50 notes per second max
+    private Map<String, Long> lastNoteTime = new HashMap<>();
+
     public void playNote(int string, int fret, double velocity) {
         if (!isRunning || line == null)
             return;
 
-        // velocity is bow speed (0 to 1)
-        velocity = Math.max(0.1, Math.min(1.0, velocity));
-
-        // make it quieter overall so it doesnt destroy ears
-        double finalAmplitude = velocity * volume * 0.4;
-
-        // generate unique key for this note
-        String noteKey = string + "-" + fret;
-
-        // stop existing note if sustain is low
-        if (sustain < 0.3 && activeNotes.containsKey(noteKey)) {
-            stopNote(string, fret);
+        // strict throttle (lines 12-18 are ai)
+        String throttleKey = string + "-" + fret;
+        long now = System.currentTimeMillis();
+        Long lastTime = lastNoteTime.get(throttleKey);
+        if (lastTime != null && (now - lastTime) < MIN_PLAY_INTERVAL_MS) {
+            return; // skip if too fast
         }
+        lastNoteTime.put(throttleKey, now);
 
-        // calculate frequency with tuning
+        // stop any existing note on this string/fret immediately
+        stopNote(string, fret);
+
+        velocity = Math.max(0.1, Math.min(1.0, velocity));
+        double finalAmplitude = velocity * volume * 0.3;
+
         double frequency = calculateFrequency(string, fret);
 
-        // clamp to valid range
         if (Double.isNaN(frequency) || frequency < 50 || frequency > 2000) {
             frequency = 440.0;
         }
@@ -90,21 +93,11 @@ public class SoundEngine {
         final double finalFrequency = frequency;
         final double finalVel = finalAmplitude;
 
-        // play in background thread
         Thread soundThread = new Thread(() -> {
             generateViolinSound(finalFrequency, finalVel, string, fret);
         });
         soundThread.start();
-        activeNotes.put(noteKey, soundThread);
-
-        // sustain effect
-        if (sustain > 0.5) {
-            try {
-                Thread.sleep((long) (sustain * 400));
-            } catch (InterruptedException e) {
-                // whatever
-            }
-        }
+        activeNotes.put(throttleKey, soundThread);
     }
 
     // calculates frequency - lines 95-115 are ai (math)
@@ -129,90 +122,51 @@ public class SoundEngine {
     // ACTUAL VIOLIN SOUND GENERATION - lines 120-250 are mostly me
     private void generateViolinSound(double frequency, double amplitude, int string, int fret) {
         int sampleRate = 44100;
-        int duration = 600; // milliseconds
+        int duration = 30; // super short, no overlap (lines 5-7 are ai)
 
-        // sustain makes it longer
+        // sustain barely matters now
         if (sustain > 0) {
-            duration += (int) (sustain * 600);
+            duration += (int) (sustain * 20);
+            if (duration > 80)
+                duration = 80;
         }
 
         int numSamples = sampleRate * duration / 1000;
+        if (numSamples < 100)
+            numSamples = 100; // minimum samples
+
         byte[] buffer = new byte[numSamples * 2];
 
-        // generate each sample
+        // generate audio
         for (int i = 0; i < numSamples; i++) {
             double time = i / (double) sampleRate;
-
-            // --- MAIN NOTE (sine wave) ---
             double angle = 2.0 * Math.PI * frequency * time;
+
+            // simple sine wave with quick decay
             double sample = Math.sin(angle);
 
-            // --- ADD VIOLIN HARMONICS (what makes it sound like a violin) ---
-            // odd harmonics give it that warm string sound
-            sample += Math.sin(angle * 2.0) * 0.15; // 2nd harmonic
-            sample += Math.sin(angle * 3.0) * 0.25; // 3rd harmonic (stronger)
-            sample += Math.sin(angle * 4.0) * 0.08; // 4th harmonic
-            sample += Math.sin(angle * 5.0) * 0.05; // 5th harmonic
+            // add harmonics
+            sample += Math.sin(angle * 2.0) * 0.2;
+            sample += Math.sin(angle * 3.0) * 0.1;
 
-            // --- ADD BOW NOISE (the scratchy sound) ---
-            // this is what makes it sound like a bow on strings
-            double bowNoise = (random.nextDouble() - 0.5) * 0.08;
-            sample += bowNoise;
-
-            // --- ADD VIBRATO (pitch wobble for expression) ---
-            double vibratoRate = 6.0; // Hz
-            double vibratoDepth = 0.005;
-            double vibratoAngle = 2.0 * Math.PI * vibratoRate * time;
-            double vibrato = 1.0 + Math.sin(vibratoAngle) * vibratoDepth;
-
-            // --- APPLY VIBRATO TO THE SAMPLE ---
-            double vibratoAngle2 = 2.0 * Math.PI * (frequency * vibrato) * time;
-            double vibratoSample = Math.sin(vibratoAngle2);
-            vibratoSample += Math.sin(vibratoAngle2 * 2.0) * 0.15;
-            vibratoSample += Math.sin(vibratoAngle2 * 3.0) * 0.25;
-
-            // mix between regular and vibrato based on bow speed
-            sample = sample * 0.6 + vibratoSample * 0.4;
-
-            // --- VOLUME ENVELOPE (attack and decay like a real violin) ---
+            // very fast envelope (attack and immediate decay)
             double envelope = 1.0;
-            if (i < 80) {
-                // attack: quick swell when bow hits string
-                envelope = i / 80.0;
-            } else if (i > numSamples - 400) {
-                // release: fade out when bow leaves
-                envelope = (numSamples - i) / 400.0;
+            if (i < 10) {
+                envelope = i / 10.0; // super fast attack
+            } else {
+                envelope = Math.exp(-(i - 10) / 200.0); // exponential decay
             }
 
-            sample *= amplitude * envelope;
+            sample *= amplitude * envelope * 0.5;
 
-            // --- REVERB (echo effect) ---
-            if (reverb > 0) {
-                // simple delay line (i know it's hacky but it works)
-                int delaySamples = (int) (sampleRate * 0.08); // 80ms delay
-                if (i > delaySamples && i - delaySamples < buffer.length / 2) {
-                    short delayedShort = (short) ((buffer[(i - delaySamples) * 2] & 0xFF) |
-                            (buffer[(i - delaySamples) * 2 + 1] << 8));
-                    double delayedSample = delayedShort / 32768.0;
-                    sample += delayedSample * reverb * 0.4;
-                }
-            }
+            // small amount of bow noise
+            sample += (random.nextDouble() - 0.5) * 0.02;
 
-            // --- BITCRUSH (digital destruction) ---
-            if (bitcrush > 0) {
-                int bits = (int) (14 - (bitcrush * 10));
-                bits = Math.max(3, Math.min(14, bits));
-                int maxValue = (1 << bits) - 1;
-                sample = Math.round(sample * maxValue) / (double) maxValue;
-                // bitcrush also adds a little grit
-                sample += (random.nextDouble() - 0.5) * bitcrush * 0.03;
-            }
-
-            // final clipping (keep it safe)
+            // clip
             sample = Math.max(-0.8, Math.min(0.8, sample));
 
-            // convert to 16-bit (lines 190-195 are ai)
-            short intSample = (short) (sample * 30000.0); // slightly lower volume
+            // convert to 16-bit
+            short intSample = (short) (sample * 30000.0);
             buffer[i * 2] = (byte) (intSample & 0xFF);
             buffer[i * 2 + 1] = (byte) ((intSample >> 8) & 0xFF);
         }
@@ -220,17 +174,9 @@ public class SoundEngine {
         // play it
         line.write(buffer, 0, buffer.length);
 
-        // let it finish
-        try {
-            Thread.sleep(duration);
-        } catch (InterruptedException e) {
-            // stopped early
-        }
-
-        // cleanup
-        if (sustain < 0.5) {
-            stopNote(string, fret);
-        }
+        // no sleep, just let it play and immediately cleanup
+        String noteKey = string + "-" + fret;
+        activeNotes.remove(noteKey);
     }
 
     // stops a specific note
