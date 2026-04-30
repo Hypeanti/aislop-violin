@@ -19,227 +19,215 @@ public class SoundEngine {
     private Random random;
 
     // effect parameters (knobs control these)
-    private double volume = 0.5; // 0 to 1
+    private double volume = 0.3; // 0 to 1 (start quieter so ears dont bleed)
     private double sustain = 0.0; // 0 to 1 (how long notes overlap)
     private double reverb = 0.0; // 0 to 1 (echo intensity)
     private double bitcrush = 0.0; // 0 to 1 (digital destruction)
 
-    // string frequencies (horribly tuned by default)
+    // string frequencies (actually correct violin tuning this time)
     private double[] baseFrequencies = {
-            196.00, // G3 - should be standard but we'll detune anyway
+            196.00, // G3 (lowest string)
             293.66, // D3
             440.00, // A3
-            329.63 // E3
+            659.25 // E3 (highest string)
     };
 
-    // tuning offsets for each string (in semitones, cause why not)
+    // tuning offsets for each string (in semitones)
     private double[] tuningOffsets = { 0, 0, 0, 0 };
 
-    // reverb buffer for delay effect
-    private double[] reverbBuffer;
-    private int reverbWritePos;
-
-    // lines 34-45 are ai (constructor stuff is always copy-pasted anyway)
+    // lines 34-42 are ai (constructor stuff)
     public SoundEngine() {
         activeNotes = new HashMap<>();
         random = new Random();
-        reverbBuffer = new double[8820]; // ~200ms at 44100Hz
-        reverbWritePos = 0;
         initializeAudio();
-        System.out.println("SoundEngine initialized - prepare for auditory suffering");
+        System.out.println("Horrible Violin SoundEngine ready");
+        System.out.println("Tip: Turn down your speakers before playing");
     }
 
     private void initializeAudio() {
         try {
-            // 44100 Hz, 16-bit, mono, signed, big-endian (standard java audio)
-            audioFormat = new AudioFormat(44100, 16, 1, true, true);
+            // 44100 Hz, 16-bit, mono, signed, little-endian (standard)
+            audioFormat = new AudioFormat(44100, 16, 1, true, false);
             DataLine.Info info = new DataLine.Info(SourceDataLine.class, audioFormat);
             line = (SourceDataLine) AudioSystem.getLine(info);
             line.open(audioFormat);
             line.start();
             isRunning = true;
-            // deadass this took me 3 hours to get working
+            // deadass this finally works
         } catch (LineUnavailableException e) {
-            System.err.println("bro ur sound card said no: " + e.getMessage());
+            System.err.println("ur sound card said no: " + e.getMessage());
             isRunning = false;
         }
     }
 
-    // plays a note on a specific string at a specific fret with a given velocity
-    // (bow speed)
-    // lines 60-100 are mostly me, but the frequency calculation is ai ngl
+    // plays a note - lines 55-90 are mostly me
     public void playNote(int string, int fret, double velocity) {
         if (!isRunning || line == null)
             return;
 
-        // clamp velocity so it doesnt break everything
-        velocity = Math.max(0.05, Math.min(1.0, velocity));
+        // velocity is bow speed (0 to 1)
+        velocity = Math.max(0.1, Math.min(1.0, velocity));
 
-        // apply volume from knob
-        double finalAmplitude = velocity * volume;
+        // make it quieter overall so it doesnt destroy ears
+        double finalAmplitude = velocity * volume * 0.4;
 
-        // generate unique key for this note (string + fret)
+        // generate unique key for this note
         String noteKey = string + "-" + fret;
 
-        // stop existing note on same note if sustain is low
+        // stop existing note if sustain is low
         if (sustain < 0.3 && activeNotes.containsKey(noteKey)) {
             stopNote(string, fret);
         }
 
-        // calculate frequency with tuning offsets
+        // calculate frequency with tuning
         double frequency = calculateFrequency(string, fret);
 
-        // add random detuning for that "organic" horrible sound (0.5% random wobble)
-        frequency += frequency * (random.nextDouble() - 0.5) * 0.01;
-
-        // make sure frequency is valid (line 85 is ai)
-        if (Double.isNaN(frequency) || frequency < 20 || frequency > 20000) {
-            frequency = 440.0; // default to A4 if something broke
-            System.err.println("the frequency was messed up, reset to 440Hz");
+        // clamp to valid range
+        if (Double.isNaN(frequency) || frequency < 50 || frequency > 2000) {
+            frequency = 440.0;
         }
 
-        // FIX: make a final copy for the lambda (lines 90-92 are ai)
         final double finalFrequency = frequency;
+        final double finalVel = finalAmplitude;
 
-        // start a new thread for this note so multiple notes can play at once
+        // play in background thread
         Thread soundThread = new Thread(() -> {
-            generateNote(finalFrequency, finalAmplitude, string, fret);
+            generateViolinSound(finalFrequency, finalVel, string, fret);
         });
         soundThread.start();
         activeNotes.put(noteKey, soundThread);
 
-        // if sustain is high, keep the note around longer (line 99 is ai)
+        // sustain effect
         if (sustain > 0.5) {
             try {
-                Thread.sleep((long) (sustain * 500));
-                // don't stop immediately, let it ring
+                Thread.sleep((long) (sustain * 400));
             } catch (InterruptedException e) {
-                // who cares
+                // whatever
             }
         }
     }
 
-    // calculates frequency based on string, fret, and tuning offsets
-    // lines 108-130 are ai because math is hard
+    // calculates frequency - lines 95-115 are ai (math)
     private double calculateFrequency(int string, int fret) {
-        // make sure string index is valid
         if (string < 0 || string >= baseFrequencies.length) {
-            string = 0; // default to first string if invalid
+            string = 0;
         }
-
-        // make sure fret is valid (lines 113-116 are ai)
         if (fret < 0)
             fret = 0;
 
-        // base frequency of the open string
         double baseFreq = baseFrequencies[string];
 
-        // apply tuning offset (in semitones, 1 semitone = 2^(1/12))
+        // apply tuning offset (semitone adjustment)
         baseFreq *= Math.pow(2.0, tuningOffsets[string] / 12.0);
 
-        // calculate fret frequency (each fret = 1 semitone)
-        // if fret is 0 (open string), multiplier is 1.0
-        double multiplier = Math.pow(2.0, fret / 12.0);
-        double frequency = baseFreq * multiplier;
-
-        // add a little chaos based on mystery knob (bitcrush effect)
-        if (bitcrush > 0) {
-            frequency += frequency * (random.nextDouble() - 0.5) * bitcrush * 0.05;
-        }
-
-        // lines 128-130 are ai (clamping frequency)
-        // clamp to audible range
-        if (frequency < 20)
-            frequency = 20;
-        if (frequency > 8000)
-            frequency = 8000;
+        // each fret is a semitone
+        double frequency = baseFreq * Math.pow(2.0, fret / 12.0);
 
         return frequency;
     }
 
-    // generates the actual audio samples for a note
-    // lines 136-220 are half ai, half me (mostly me struggling with byte buffers)
-    private void generateNote(double frequency, double amplitude, int string, int fret) {
+    // ACTUAL VIOLIN SOUND GENERATION - lines 120-250 are mostly me
+    private void generateViolinSound(double frequency, double amplitude, int string, int fret) {
         int sampleRate = 44100;
-        int duration = 300; // milliseconds
+        int duration = 600; // milliseconds
 
-        // apply sustain (longer duration = more sustain)
+        // sustain makes it longer
         if (sustain > 0) {
-            duration += (int) (sustain * 700);
+            duration += (int) (sustain * 600);
         }
 
         int numSamples = sampleRate * duration / 1000;
-        byte[] buffer = new byte[numSamples * 2]; // 2 bytes per sample (16-bit)
+        byte[] buffer = new byte[numSamples * 2];
 
-        // generate the audio
+        // generate each sample
         for (int i = 0; i < numSamples; i++) {
             double time = i / (double) sampleRate;
-            double angle = 2.0 * Math.PI * frequency * time;
 
-            // start with basic sine wave
+            // --- MAIN NOTE (sine wave) ---
+            double angle = 2.0 * Math.PI * frequency * time;
             double sample = Math.sin(angle);
 
-            // add harmonics for that "violin" sound (even to make it sound jank)
-            sample += Math.sin(angle * 2.0) * 0.3;
-            sample += Math.sin(angle * 3.0) * 0.15;
-            sample += Math.sin(angle * 4.0) * 0.07;
+            // --- ADD VIOLIN HARMONICS (what makes it sound like a violin) ---
+            // odd harmonics give it that warm string sound
+            sample += Math.sin(angle * 2.0) * 0.15; // 2nd harmonic
+            sample += Math.sin(angle * 3.0) * 0.25; // 3rd harmonic (stronger)
+            sample += Math.sin(angle * 4.0) * 0.08; // 4th harmonic
+            sample += Math.sin(angle * 5.0) * 0.05; // 5th harmonic
 
-            // apply amplitude envelope (attack and decay)
+            // --- ADD BOW NOISE (the scratchy sound) ---
+            // this is what makes it sound like a bow on strings
+            double bowNoise = (random.nextDouble() - 0.5) * 0.08;
+            sample += bowNoise;
+
+            // --- ADD VIBRATO (pitch wobble for expression) ---
+            double vibratoRate = 6.0; // Hz
+            double vibratoDepth = 0.005;
+            double vibratoAngle = 2.0 * Math.PI * vibratoRate * time;
+            double vibrato = 1.0 + Math.sin(vibratoAngle) * vibratoDepth;
+
+            // --- APPLY VIBRATO TO THE SAMPLE ---
+            double vibratoAngle2 = 2.0 * Math.PI * (frequency * vibrato) * time;
+            double vibratoSample = Math.sin(vibratoAngle2);
+            vibratoSample += Math.sin(vibratoAngle2 * 2.0) * 0.15;
+            vibratoSample += Math.sin(vibratoAngle2 * 3.0) * 0.25;
+
+            // mix between regular and vibrato based on bow speed
+            sample = sample * 0.6 + vibratoSample * 0.4;
+
+            // --- VOLUME ENVELOPE (attack and decay like a real violin) ---
             double envelope = 1.0;
-            if (i < 50) {
-                envelope = i / 50.0; // quick attack
-            } else if (i > numSamples - 200) {
-                envelope = (numSamples - i) / 200.0; // release
+            if (i < 80) {
+                // attack: quick swell when bow hits string
+                envelope = i / 80.0;
+            } else if (i > numSamples - 400) {
+                // release: fade out when bow leaves
+                envelope = (numSamples - i) / 400.0;
             }
 
             sample *= amplitude * envelope;
 
-            // apply reverb (add delayed and attenuated version of itself)
-            // lines 175-188 are ai (reverb is complicated)
+            // --- REVERB (echo effect) ---
             if (reverb > 0) {
-                int delaySamples = (int) (sampleRate * 0.05); // 50ms delay
-                if (i > delaySamples) {
-                    // read from reverb buffer with delay
-                    int readPos = (reverbWritePos - delaySamples + reverbBuffer.length) % reverbBuffer.length;
-                    double delayedSample = reverbBuffer[readPos];
-                    sample += delayedSample * reverb * 0.4; // reduced so it doesn't explode
+                // simple delay line (i know it's hacky but it works)
+                int delaySamples = (int) (sampleRate * 0.08); // 80ms delay
+                if (i > delaySamples && i - delaySamples < buffer.length / 2) {
+                    short delayedShort = (short) ((buffer[(i - delaySamples) * 2] & 0xFF) |
+                            (buffer[(i - delaySamples) * 2 + 1] << 8));
+                    double delayedSample = delayedShort / 32768.0;
+                    sample += delayedSample * reverb * 0.4;
                 }
-                // write current sample to reverb buffer
-                reverbBuffer[reverbWritePos] = sample * 0.5; // dampen feedback
-                reverbWritePos = (reverbWritePos + 1) % reverbBuffer.length;
             }
 
-            // apply bitcrush (reduce sample resolution)
+            // --- BITCRUSH (digital destruction) ---
             if (bitcrush > 0) {
-                int bits = (int) (16 - (bitcrush * 14)); // 2 to 16 bits
-                bits = Math.max(2, Math.min(16, bits)); // clamp to valid range (line 195 is ai)
-                int maxValue = (1 << bits) - 1; // faster than Math.pow
+                int bits = (int) (14 - (bitcrush * 10));
+                bits = Math.max(3, Math.min(14, bits));
+                int maxValue = (1 << bits) - 1;
                 sample = Math.round(sample * maxValue) / (double) maxValue;
+                // bitcrush also adds a little grit
+                sample += (random.nextDouble() - 0.5) * bitcrush * 0.03;
             }
 
-            // add random noise for that authentic horrible sound (line 200 is ai)
-            sample += (random.nextDouble() - 0.5) * 0.03;
+            // final clipping (keep it safe)
+            sample = Math.max(-0.8, Math.min(0.8, sample));
 
-            // clip to prevent ear explosion
-            sample = Math.max(-0.9, Math.min(0.9, sample));
-
-            // convert to 16-bit little-endian
-            short intSample = (short) (sample * 32767.0);
+            // convert to 16-bit (lines 190-195 are ai)
+            short intSample = (short) (sample * 30000.0); // slightly lower volume
             buffer[i * 2] = (byte) (intSample & 0xFF);
             buffer[i * 2 + 1] = (byte) ((intSample >> 8) & 0xFF);
         }
 
-        // write to audio line
+        // play it
         line.write(buffer, 0, buffer.length);
 
-        // sleep for a bit to let it play
+        // let it finish
         try {
             Thread.sleep(duration);
         } catch (InterruptedException e) {
-            // note was stopped early (lines 215-218 are ai)
+            // stopped early
         }
 
-        // if sustain is low, remove from active notes
+        // cleanup
         if (sustain < 0.5) {
             stopNote(string, fret);
         }
@@ -255,7 +243,7 @@ public class SoundEngine {
         }
     }
 
-    // stops EVERYTHING (panic button behavior)
+    // stops EVERYTHING
     public void stopAllNotes() {
         for (Thread t : activeNotes.values()) {
             if (t != null && t.isAlive()) {
@@ -266,7 +254,7 @@ public class SoundEngine {
         System.out.println("PANIC! All notes stopped");
     }
 
-    // setters for all the knobs (called by GUI)
+    // setters for all the knobs
     public void setVolume(double vol) {
         this.volume = Math.max(0, Math.min(1, vol));
         System.out.println("Volume set to " + (int) (volume * 100) + "%");
@@ -284,18 +272,18 @@ public class SoundEngine {
 
     public void setBitcrush(double crush) {
         this.bitcrush = Math.max(0, Math.min(1, crush));
-        System.out.println("Bitcrush set to " + (int) (bitcrush * 100) + "% (your ears are bleeding now)");
+        System.out.println("Bitcrush set to " + (int) (bitcrush * 100) + "% (digital destruction)");
     }
 
     public void setStringTuning(int string, double offset) {
         if (string >= 0 && string < 4) {
             tuningOffsets[string] = offset;
-            System.out.println("String " + (string + 1) + " tuned to " + (offset > 0 ? "+" : "") + offset
-                    + " semitones of horror");
+            String sign = offset > 0 ? "+" : "";
+            System.out.println("String " + (string + 1) + " tuned: " + sign + offset + " semitones");
         }
     }
 
-    // clean up when closing
+    // clean up
     public void close() {
         isRunning = false;
         stopAllNotes();
