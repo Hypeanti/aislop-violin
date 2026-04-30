@@ -1,3 +1,10 @@
+// AI helped naming everything and making the placeholders
+// also some parts of the code are pure AI and some of them were changed because... well... its AI
+
+
+
+
+
 package com.violin;
 
 import javax.swing.*;
@@ -63,7 +70,7 @@ public class ViolinGUI extends JFrame {
     }
     
     private void setupGUI() {
-        setTitle("🎻 HORRIBLE VIOLIN - Your Ears Will Hate You 🎻");
+        setTitle("🎻 HORRIBLE VIOLIN - Your Ears Will Hate You 🎻"); //line 66 -> line 96 is AI
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
         
@@ -116,7 +123,7 @@ public class ViolinGUI extends JFrame {
                 g2d.fillRoundRect(250, 250, 80, 200, 40, 40);
                 g2d.fillRoundRect(470, 250, 80, 200, 40, 40);
                 
-                // Draw strings
+                // Draw strings - AI
                 g2d.setColor(Color.WHITE);
                 int[] stringX = {300, 350, 450, 500};
                 for (int x : stringX) {
@@ -156,7 +163,7 @@ public class ViolinGUI extends JFrame {
         violinBodyPanel.setPreferredSize(new Dimension(800, 700));
         violinBodyPanel.setBackground(new Color(255, 228, 196));
         
-        // Add mouse motion for repaint and speed tracking
+        // Add mouse motion for repaint and speed tracking - AI
         violinBodyPanel.addMouseMotionListener(new MouseMotionAdapter() {
             @Override
             public void mouseMoved(MouseEvent e) {
@@ -190,7 +197,7 @@ public class ViolinGUI extends JFrame {
         return -1;
     }
     
-    private void createControlPanel() {
+    private void createControlPanel() { //names are and the .setText are AI
         controlPanel = new JPanel();
         controlPanel.setLayout(new BoxLayout(controlPanel, BoxLayout.Y_AXIS));
         controlPanel.setBackground(new Color(50, 50, 50));
@@ -242,7 +249,7 @@ public class ViolinGUI extends JFrame {
         speedLabel.setForeground(Color.WHITE);
         speedLabel.setFont(new Font("Monospaced", Font.BOLD, 14));
         
-        // Add everything to panel
+        // Add everything to panel (ctrlC ctrlV)
         controlPanel.add(Box.createRigidArea(new Dimension(0, 20)));
         controlPanel.add(volumeLabel);
         controlPanel.add(volumeSlider);
@@ -287,7 +294,7 @@ public class ViolinGUI extends JFrame {
             tuneSlider.setPaintTicks(true);
             tuneSlider.setPaintLabels(true);
             
-            final int stringIndex = i;
+            final int stringIndex = i; //AI
             tuneSlider.addChangeListener(e -> {
                 tuningOffsets[stringIndex] = tuneSlider.getValue() / 100.0;
                 soundEngine.setStringTuning(stringIndex, tuningOffsets[stringIndex]);
@@ -318,7 +325,7 @@ public class ViolinGUI extends JFrame {
         speedTimer.start();
     }
     
-    private void createInstructionsDialog() {
+    private void createInstructionsDialog() { // pure AI below
         String instructions = 
             "🎻 HORRIBLE VIOLIN INSTRUCTIONS 🎻\n\n" +
             "BOW CONTROL:\n" +
