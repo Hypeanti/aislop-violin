@@ -24,7 +24,7 @@ public class FretboardInput {
         this.soundEngine = engine;
         this.bowController = controller;
         this.activeFrets = new boolean[4][12];
-        System.out.println("⌨️ Fretboard ready - start smashing those keys");
+        System.out.println("[*] Fretboard ready - start smashing those keys");
     }
     
     // attaches keyboard listener to a component

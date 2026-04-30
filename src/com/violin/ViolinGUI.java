@@ -202,50 +202,50 @@ public class ViolinGUI extends JFrame {
         controlPanel.setLayout(new BoxLayout(controlPanel, BoxLayout.Y_AXIS));
         controlPanel.setBackground(new Color(50, 50, 50));
         controlPanel.setPreferredSize(new Dimension(300, 700));
-        controlPanel.setBorder(BorderFactory.createTitledBorder("🎛️ HORRIBLE CONTROLS"));
+        controlPanel.setBorder(BorderFactory.createTitledBorder("[*] HORRIBLE CONTROLS"));
         
         // Volume Fader
-        volumeLabel = new JLabel("🔊 VOLUME: 50%");
+        volumeLabel = new JLabel("[*] VOLUME: 50%");
         volumeLabel.setForeground(Color.WHITE);
         volumeSlider = new JSlider(0, 100, 50);
         volumeSlider.addChangeListener(e -> {
             int vol = volumeSlider.getValue();
-            volumeLabel.setText("🔊 VOLUME: " + vol + "%");
+            volumeLabel.setText("[*] VOLUME: " + vol + "%");
             soundEngine.setVolume(vol / 100.0);
         });
         
         // Sustain Knob
-        sustainLabel = new JLabel("🎵 SUSTAIN: 0%");
+        sustainLabel = new JLabel("[*] SUSTAIN: 0%");
         sustainLabel.setForeground(Color.WHITE);
         sustainKnob = new JSlider(0, 100, 0);
         sustainKnob.addChangeListener(e -> {
             int sus = sustainKnob.getValue();
-            sustainLabel.setText("🎵 SUSTAIN: " + sus + "%");
+            sustainLabel.setText("[*] SUSTAIN: " + sus + "%");
             soundEngine.setSustain(sus / 100.0);
         });
         
         // Reverb Knob
-        reverbLabel = new JLabel("🌀 REVERB: 0%");
+        reverbLabel = new JLabel("[*] REVERB: 0%");
         reverbLabel.setForeground(Color.WHITE);
         reverbKnob = new JSlider(0, 100, 0);
         reverbKnob.addChangeListener(e -> {
             int rev = reverbKnob.getValue();
-            reverbLabel.setText("🌀 REVERB: " + rev + "%");
+            reverbLabel.setText("[*] REVERB: " + rev + "%");
             soundEngine.setReverb(rev / 100.0);
         });
         
         // Mystery Knob (Bitcrush)
-        mysteryLabel = new JLabel("❓ MYSTERY: 0% (Bitcrush)");
+        mysteryLabel = new JLabel("[?] MYSTERY: 0% (Bitcrush)");
         mysteryLabel.setForeground(Color.WHITE);
         mysteryKnob = new JSlider(0, 100, 0);
         mysteryKnob.addChangeListener(e -> {
             int mys = mysteryKnob.getValue();
-            mysteryLabel.setText("❓ MYSTERY: " + mys + "% (Bitcrush)");
+            mysteryLabel.setText("[?] MYSTERY: " + mys + "% (Bitcrush)");
             soundEngine.setBitcrush(mys / 100.0);
         });
         
         // Speed display
-        speedLabel = new JLabel("🏹 BOW SPEED: 0 px/s");
+        speedLabel = new JLabel("[*] BOW SPEED: 0 px/s");
         speedLabel.setForeground(Color.WHITE);
         speedLabel.setFont(new Font("Monospaced", Font.BOLD, 14));
         
@@ -318,7 +318,7 @@ public class ViolinGUI extends JFrame {
                 // Speed would be calculated by a separate thread
                 // For now, use a simulated value
                 currentSpeed = Math.random() * 1000; // Temporary
-                speedLabel.setText("🏹 BOW SPEED: " + String.format("%.0f", currentSpeed) + " px/s");
+                speedLabel.setText("[*] BOW SPEED: " + String.format("%.0f", currentSpeed) + " px/s");
                 violinBodyPanel.repaint();
             }
         });

@@ -7,6 +7,10 @@ public class MouseTracker {
     //shared flag to control if tracking is active, runs over all thread bc of volatile
     static volatile boolean running = false;
 
+    public MouseTracker() {
+        // default constructor for ViolinGUI integration
+    }
+    
     public static void main(String[] args) throws InterruptedException {
         
         //lines 13 and 14 are ai

@@ -35,10 +35,16 @@ public class SoundEngine {
     // tuning offsets for each string (in semitones, cause why not)
     private double[] tuningOffsets = {0, 0, 0, 0};
     
+    // reverb buffer for delay effect
+    private double[] reverbBuffer;
+    private int reverbWritePos;
+    
     // lines 34-45 are ai (constructor stuff is always copy-pasted anyway)
     public SoundEngine() {
         activeNotes = new HashMap<>();
         random = new Random();
+        reverbBuffer = new double[8820]; // ~200ms at 44100Hz
+        reverbWritePos = 0;
         initializeAudio();
         System.out.println("🔥 SoundEngine initialized - prepare for auditory suffering 🔥");
     }
@@ -164,10 +170,14 @@ public class SoundEngine {
             if (reverb > 0) {
                 int delaySamples = (int)(sampleRate * 0.05); // 50ms delay
                 if (i > delaySamples) {
-                    // this is hacky but it works ig
-                    double reverbAmount = reverb * 0.5;
-                    // would need previous sample buffer for proper reverb but who cares
+                    // read from reverb buffer with delay
+                    int readPos = (reverbWritePos - delaySamples + reverbBuffer.length) % reverbBuffer.length;
+                    double delayedSample = reverbBuffer[readPos];
+                    sample += delayedSample * reverb * 0.5;
                 }
+                // write current sample to reverb buffer
+                reverbBuffer[reverbWritePos] = sample;
+                reverbWritePos = (reverbWritePos + 1) % reverbBuffer.length;
             }
             
             // apply bitcrush (reduce sample resolution)
@@ -223,34 +233,34 @@ public class SoundEngine {
             }
         }
         activeNotes.clear();
-        System.out.println("🛑 PANIC! All notes stopped 🛑");
+        System.out.println("[!] PANIC! All notes stopped");
     }
     
     // setters for all the knobs (called by GUI)
     public void setVolume(double vol) {
         this.volume = Math.max(0, Math.min(1, vol));
-        System.out.println("🔊 Volume set to " + (int)(volume * 100) + "%");
+        System.out.println("[*] Volume set to " + (int)(volume * 100) + "%");
     }
     
     public void setSustain(double sus) {
         this.sustain = Math.max(0, Math.min(1, sus));
-        System.out.println("🎵 Sustain set to " + (int)(sustain * 100) + "%");
+        System.out.println("[*] Sustain set to " + (int)(sustain * 100) + "%");
     }
     
     public void setReverb(double rev) {
         this.reverb = Math.max(0, Math.min(1, rev));
-        System.out.println("🌀 Reverb set to " + (int)(reverb * 100) + "%");
+        System.out.println("[*] Reverb set to " + (int)(reverb * 100) + "%");
     }
     
     public void setBitcrush(double crush) {
         this.bitcrush = Math.max(0, Math.min(1, crush));
-        System.out.println("❓ Bitcrush set to " + (int)(bitcrush * 100) + "% (your ears are bleeding now)");
+        System.out.println("[*] Bitcrush set to " + (int)(bitcrush * 100) + "% (your ears are bleeding now)");
     }
     
     public void setStringTuning(int string, double offset) {
         if (string >= 0 && string < 4) {
             tuningOffsets[string] = offset;
-            System.out.println("🎻 String " + (string+1) + " tuned to " + (offset > 0 ? "+" : "") + offset + " semitones of horror");
+            System.out.println("[*] String " + (string+1) + " tuned to " + (offset > 0 ? "+" : "") + offset + " semitones of horror");
         }
     }
     

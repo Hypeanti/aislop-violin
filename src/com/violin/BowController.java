@@ -20,7 +20,7 @@ public class BowController {
         this.lastMousePos = new Point(0, 0);
         this.currentVelocity = 0;
         this.mouseButtonsPressed = new boolean[4]; // indices 1-3 for buttons
-        System.out.println("🏹 BowController ready - start moving that mouse");
+        System.out.println("[*] BowController ready - start moving that mouse");
     }
     
     // starts tracking mouse on a component
