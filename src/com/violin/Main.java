@@ -64,28 +64,43 @@ class MouseCalc {
 
 class Music {
 
+    public static void play(double velocity) {
+        try {
+            Synthesizer synth = MidiSystem.getSynthesizer();
+            synth.open();
+            Instrument[] instruments = synth.getAvailableInstruments();
+            MidiChannel[] channels = synth.getChannels();
+            MidiChannel channel = channels[0];
+            int index = 40;
+            channel.programChange(index);
+
+            
+            synth.loadInstrument(instruments[index]);
+            channel.noteOn(60, 100);
+            Thread.sleep(500);
+            channel.noteOn(55, 100);
+            Thread.sleep(1000);
+            channel.noteOff(60);
+            Thread.sleep(1000);
+            synth.close();
+        }
+        catch (Exception e) {
+
+        }
+    }
+
 }
 
 class Main {
     public static void main(String[] args) {
         try {
-            Synthesizer synth = MidiSystem.getSynthesizer();
-            Instrument[] instruments = synth.getAvailableInstruments();
-            int index = 0;
-
-            for (int i = 0; i < instruments.length; i++) {
-                if (instruments[i].getName() == "Violin") {
-                    index = i;
-                }
-            }
-
             while (true) {
                 PointerInfo mouse = MouseInfo.getPointerInfo();
 
                 try {
                     Thread.sleep(100);
-                    synth.loadInstrument(instruments[index]);
-                    
+                    Music.play(MouseCalc.getSpeed(mouse));
+                    System.out.println(MouseCalc.getSpeed(mouse));
                 }
                 catch(Exception e) {
                     System.out.print(e);
