@@ -1,74 +1,148 @@
+package com.violin;
+
 import java.awt.Point;
 import java.awt.MouseInfo;
-import java.util.Scanner;
+import java.awt.PointerInfo;
 
 public class MouseTracker {
-    
-    //shared flag to control if tracking is active, runs over all thread bc of volatile
-    static volatile boolean running = false;
 
-    public static void main(String[] args) throws InterruptedException {
-        
-        //lines 13 and 14 are ai
-        long lastTime;
-        lastTime = System.nanoTime();
-        //handles user input, outside of main loop
-        Thread inputThread = new Thread(() -> {
-            Scanner sc = new Scanner(System.in);
+    private static MouseTracker instance;
+    private Thread trackingThread;
+    private volatile boolean isTracking;
+    private volatile boolean running;
 
-            while (true) {
+    private Point lastPosition;
+    private long lastTime;
+    private double currentSpeed;
 
-                //pauses when you press enter
-                String input = sc.nextLine();
+    // listener interface for other classes to get mouse data
+    private MouseListener listener;
 
-                //stops the program when you type exit
-                if (input.equalsIgnoreCase("exit")) {
-                    System.out.println("EXIT");
-                    System.exit(0);
+    public interface MouseListener {
+        void onMouseMove(Point position, double speed);
+
+        void onMouseStill(Point position);
+    }
+
+    // singleton pattern so only one tracker runs (lines 24-32 are ai)
+    public static MouseTracker getInstance() {
+        if (instance == null) {
+            instance = new MouseTracker();
+        }
+        return instance;
+    }
+
+    private MouseTracker() {
+        this.isTracking = false;
+        this.running = true;
+        this.currentSpeed = 0;
+        this.lastPosition = new Point(0, 0);
+    }
+
+    public void setListener(MouseListener listener) {
+        this.listener = listener;
+    }
+
+    public void startTracking() {
+        if (trackingThread != null && trackingThread.isAlive()) {
+            System.out.println("MouseTracker: already running");
+            return;
+        }
+
+        isTracking = true;
+        trackingThread = new Thread(() -> {
+            // lines 45-50 are ai (initialization)
+            lastTime = System.nanoTime();
+            lastPosition = getMousePosition();
+
+            System.out.println("MouseTracker: started tracking");
+
+            while (running) {
+                if (isTracking) {
+                    Point current = getMousePosition();
+
+                    if (current != null && lastPosition != null) {
+                        // calculate speed if mouse moved (lines 57-68 are ai)
+                        if (!current.equals(lastPosition)) {
+                            long now = System.nanoTime();
+                            double timeDelta = (now - lastTime) / 1_000_000_000.0;
+
+                            if (timeDelta > 0) {
+                                double distance = lastPosition.distance(current);
+                                currentSpeed = distance / timeDelta;
+
+                                // output to terminal
+                                System.out.printf("[Mouse] Pos: (%d, %d) | Speed: %.2f px/s%n",
+                                        current.x, current.y, currentSpeed);
+
+                                // notify listener if one exists
+                                if (listener != null) {
+                                    listener.onMouseMove(current, currentSpeed);
+                                }
+                            }
+
+                            lastTime = now;
+                            lastPosition = current;
+                        } else {
+                            // mouse is still
+                            System.out.printf("[Mouse] Pos: (%d, %d) | Speed: 0.00 px/s (still)%n",
+                                    current.x, current.y);
+
+                            if (listener != null) {
+                                listener.onMouseStill(current);
+                            }
+                        }
+                    }
                 }
 
-                //ts runs when you press enter, acts like a switch
-                running = !running;
-
-                //read it dawg, started or stopped
-                System.out.println(running ? "Started" : "Stopped");
+                // delay to prevent CPU spam (line 85 is ai)
+                try {
+                    Thread.sleep(16); // ~60fps tracking
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         });
 
-        //the "Daemon" thread stops when main thread ends, just stops it from constantly running after shutdown
-        inputThread.setDaemon(true);
-        inputThread.start();
+        trackingThread.setDaemon(true);
+        trackingThread.start();
+    }
 
-        //deadass just gets the mouse position at the start
-        Point last = MouseInfo.getPointerInfo().getLocation();
+    public void stopTracking() {
+        isTracking = false;
+        System.out.println("MouseTracker: stopped tracking");
+    }
 
-        while (true) {
-
-            //only works if running is true, so you can switch on/off
-            if (running) {
-                Point current = MouseInfo.getPointerInfo().getLocation();
-                
-                //if you wanna display the mouse coordinates uncomment the line
-                //System.out.println(current);
-                
-                //this compares the current position with the last
-                if (!current.equals(last)) {
-                    //lines 57, 58, 59, 60 are ai
-                    long now = System.nanoTime();
-                    double speed = last.distance(current) / ((now - lastTime) / 1_000_000_000.0);
-                    System.out.printf("Mouse speed: %.2f px/s%n", speed);
-                    lastTime = now;
-
-                } else {
-                    System.out.println("Mouse is still");
-                }
-
-                //update the position of the mouse 
-                last = current;
-
-                //delay to use less CPU
-                Thread.sleep(100);
-            }
+    public void shutdown() {
+        running = false;
+        if (trackingThread != null) {
+            trackingThread.interrupt();
         }
+        System.out.println("MouseTracker: shut down");
+    }
+
+    private Point getMousePosition() {
+        try {
+            PointerInfo info = MouseInfo.getPointerInfo();
+            if (info != null) {
+                return info.getLocation();
+            }
+        } catch (Exception e) {
+            // mouse info failed, just return null
+        }
+        return null;
+    }
+
+    public double getCurrentSpeed() {
+        return currentSpeed;
+    }
+
+    public Point getCurrentPosition() {
+        return getMousePosition();
+    }
+
+    public boolean isTracking() {
+        return isTracking;
     }
 }

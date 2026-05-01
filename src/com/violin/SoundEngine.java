@@ -1,266 +1,199 @@
 package com.violin;
 
-import javax.sound.sampled.*;
+import javax.sound.midi.*;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Random;
 
 public class SoundEngine {
-    
-    // audio stuff - lines 8-12 are ai (i hate audio programming ngl)
-    private AudioFormat audioFormat;
-    private SourceDataLine line;
-    private boolean isRunning;
-    
-    // keeps track of active notes so we can stop them later
-    private Map<String, Thread> activeNotes;
-    
-    // random generator for that chaotic energy
-    private Random random;
-    
-    // effect parameters (knobs control these)
-    private double volume = 0.5;      // 0 to 1
-    private double sustain = 0.0;     // 0 to 1 (how long notes overlap)
-    private double reverb = 0.0;       // 0 to 1 (echo intensity)
-    private double bitcrush = 0.0;     // 0 to 1 (digital destruction)
-    
-    // string frequencies (horribly tuned by default)
-    private double[] baseFrequencies = {
-        196.00,  // G3 - should be standard but we'll detune anyway
-        293.66,  // D3
-        440.00,  // A3
-        329.63   // E3
-    };
-    
-    // tuning offsets for each string (in semitones, cause why not)
-    private double[] tuningOffsets = {0, 0, 0, 0};
-    
-    // lines 34-45 are ai (constructor stuff is always copy-pasted anyway)
+
+    private Synthesizer synthesizer;
+    private MidiChannel[] channels;
+    private Map<String, Integer> activeNotes;
+
+    // effect parameters (still usable)
+    private double volume = 0.6;
+    private double sustain = 0.0;
+
+    // velocity tracking for each channel (lines 16-19 are ai)
+    private int currentChannel = 0;
+    private static final int VIOLIN_PROGRAM = 40; // 40 = violin, 41 = slow violin, 42 = cello
+
+    // tuning offsets in semitones
+    private double[] tuningOffsets = { 0, 0, 0, 0 };
+
     public SoundEngine() {
         activeNotes = new HashMap<>();
-        random = new Random();
-        initializeAudio();
-        System.out.println("🔥 SoundEngine initialized - prepare for auditory suffering 🔥");
+        initializeMidi();
+        System.out.println("MIDI SoundEngine ready - using built-in violin");
     }
-    
-    private void initializeAudio() {
+
+    private void initializeMidi() {
         try {
-            // 44100 Hz, 16-bit, mono, signed, big-endian (standard java audio)
-            audioFormat = new AudioFormat(44100, 16, 1, true, true);
-            DataLine.Info info = new DataLine.Info(SourceDataLine.class, audioFormat);
-            line = (SourceDataLine) AudioSystem.getLine(info);
-            line.open(audioFormat);
-            line.start();
-            isRunning = true;
-            // deadass this took me 3 hours to get working
-        } catch (LineUnavailableException e) {
-            System.err.println("bro ur sound card said no: " + e.getMessage());
-            isRunning = false;
-        }
-    }
-    
-    // plays a note on a specific string at a specific fret with a given velocity (bow speed)
-    // lines 60-90 are mostly me, but the frequency calculation is ai ngl
-    public void playNote(int string, int fret, double velocity) {
-        if (!isRunning || line == null) return;
-        
-        // clamp velocity so it doesnt break everything
-        velocity = Math.max(0.1, Math.min(1.0, velocity));
-        
-        // apply volume from knob
-        velocity *= volume;
-        
-        // generate unique key for this note (string + fret)
-        String noteKey = string + "-" + fret;
-        
-        // stop existing note on same note if sustain is low
-        if (sustain < 0.3 && activeNotes.containsKey(noteKey)) {
-            stopNote(string, fret);
-        }
-        
-        // calculate frequency with tuning offsets
-        double frequency = calculateFrequency(string, fret);
-        
-        // add random detuning for that "organic" horrible sound (0.5% random wobble)
-        frequency += frequency * (random.nextDouble() - 0.5) * 0.01;
-        
-        // start a new thread for this note so multiple notes can play at once
-        Thread soundThread = new Thread(() -> {
-            generateNote(frequency, velocity, string, fret);
-        });
-        soundThread.start();
-        activeNotes.put(noteKey, soundThread);
-        
-        // if sustain is high, keep the note around longer
-        if (sustain > 0.5) {
-            try {
-                Thread.sleep((long)(sustain * 500));
-                // don't stop immediately, let it ring
-            } catch (InterruptedException e) {
-                // who cares
-            }
-        }
-    }
-    
-    // calculates frequency based on string, fret, and tuning offsets
-    // lines 94-110 are ai because math is hard
-    private double calculateFrequency(int string, int fret) {
-        // base frequency of the open string
-        double baseFreq = baseFrequencies[string];
-        
-        // apply tuning offset (in semitones, 1 semitone = 2^(1/12))
-        baseFreq *= Math.pow(2, tuningOffsets[string] / 12.0);
-        
-        // calculate fret frequency (each fret = 1 semitone)
-        double frequency = baseFreq * Math.pow(2, fret / 12.0);
-        
-        // add a little chaos based on mystery knob
-        if (bitcrush > 0) {
-            frequency += frequency * (random.nextDouble() - 0.5) * bitcrush * 0.1;
-        }
-        
-        return frequency;
-    }
-    
-    // generates the actual audio samples for a note
-    // lines 114-180 are half ai, half me (mostly me struggling with byte buffers)
-    private void generateNote(double frequency, double amplitude, int string, int fret) {
-        int sampleRate = 44100;
-        int duration = 300; // milliseconds
-        
-        // apply sustain (longer duration = more sustain)
-        if (sustain > 0) {
-            duration += (int)(sustain * 700);
-        }
-        
-        int numSamples = sampleRate * duration / 1000;
-        byte[] buffer = new byte[numSamples * 2]; // 2 bytes per sample (16-bit)
-        
-        // generate the audio
-        for (int i = 0; i < numSamples; i++) {
-            double time = i / (double)sampleRate;
-            double angle = 2 * Math.PI * frequency * time;
-            
-            // start with basic sine wave
-            double sample = Math.sin(angle);
-            
-            // add harmonics for that "violin" sound (even to make it sound jank)
-            sample += Math.sin(angle * 2) * 0.3;
-            sample += Math.sin(angle * 3) * 0.15;
-            sample += Math.sin(angle * 4) * 0.07;
-            
-            // apply amplitude envelope (attack and decay)
-            double envelope = 1.0;
-            if (i < 50) {
-                envelope = i / 50.0; // quick attack
-            } else if (i > numSamples - 200) {
-                envelope = (numSamples - i) / 200.0; // release
-            }
-            
-            sample *= amplitude * envelope;
-            
-            // apply reverb (add delayed and attenuated version of itself)
-            // lines 145-155 are ai (reverb is complicated)
-            if (reverb > 0) {
-                int delaySamples = (int)(sampleRate * 0.05); // 50ms delay
-                if (i > delaySamples) {
-                    // this is hacky but it works ig
-                    double reverbAmount = reverb * 0.5;
-                    // would need previous sample buffer for proper reverb but who cares
+            synthesizer = MidiSystem.getSynthesizer();
+            synthesizer.open();
+            channels = synthesizer.getChannels();
+
+            // set all channels to violin (lines 32-37 are ai)
+            for (int i = 0; i < channels.length; i++) {
+                if (channels[i] != null) {
+                    channels[i].programChange(VIOLIN_PROGRAM);
                 }
             }
-            
-            // apply bitcrush (reduce sample resolution)
-            if (bitcrush > 0) {
-                int bits = (int)(16 - (bitcrush * 14)); // 2 to 16 bits
-                int maxValue = (int)Math.pow(2, bits) - 1;
-                sample = Math.round(sample * maxValue) / (double)maxValue;
-            }
-            
-            // add random noise for that authentic horrible sound
-            sample += (random.nextDouble() - 0.5) * 0.05;
-            
-            // clip to prevent ear explosion
-            sample = Math.max(-0.9, Math.min(0.9, sample));
-            
-            // convert to 16-bit little-endian
-            short intSample = (short) (sample * 32767);
-            buffer[i * 2] = (byte) (intSample & 0xFF);
-            buffer[i * 2 + 1] = (byte) ((intSample >> 8) & 0xFF);
-        }
-        
-        // write to audio line
-        line.write(buffer, 0, buffer.length);
-        
-        // sleep for a bit to let it play
-        try {
-            Thread.sleep(duration);
-        } catch (InterruptedException e) {
-            // note was stopped early
-        }
-        
-        // if sustain is low, remove from active notes
-        if (sustain < 0.5) {
-            stopNote(string, fret);
+
+            System.out.println("Synthesizer: " + synthesizer.getDeviceInfo().getName());
+            System.out.println("Violin program loaded");
+
+        } catch (MidiUnavailableException e) {
+            System.err.println("MIDI not available: " + e.getMessage());
         }
     }
-    
-    // stops a specific note
+
+    // plays a note - lines 44-80 are mostly me
+    public void playNote(int string, int fret, double velocity) {
+        if (synthesizer == null || channels == null)
+            return;
+
+        // throttle to prevent spam (lines 47-55 are ai)
+        String noteKey = string + "-" + fret;
+        if (activeNotes.containsKey(noteKey)) {
+            stopNote(string, fret);
+        }
+
+        // calculate MIDI note number based on string and fret
+        int midiNote = calculateMidiNote(string, fret);
+        if (midiNote < 0 || midiNote > 127)
+            return;
+
+        // velocity from mouse speed (0-127)
+        int midiVelocity = (int) (velocity * 80) + 40; // range 40-120
+        midiVelocity = Math.max(40, Math.min(120, midiVelocity));
+
+        // apply volume
+        midiVelocity = (int) (midiVelocity * volume);
+
+        // find a free channel or use round-robin (lines 65-72 are ai)
+        currentChannel = (currentChannel + 1) % 16;
+        while (channels[currentChannel] == null) {
+            currentChannel = (currentChannel + 1) % 16;
+        }
+
+        // play the note
+        channels[currentChannel].noteOn(midiNote, midiVelocity);
+        activeNotes.put(noteKey, currentChannel);
+
+        System.out.println("Playing: string=" + string + " fret=" + fret +
+                " note=" + midiNote + " vel=" + midiVelocity);
+
+        // sustain handling
+        if (sustain > 0.5) {
+            // leave it ringing
+        } else {
+            // schedule note-off after short duration
+            new Thread(() -> {
+                try {
+                    Thread.sleep((long) (150 - sustain * 100));
+                    stopNote(string, fret);
+                } catch (InterruptedException e) {
+                }
+            }).start();
+        }
+    }
+
+    // calculate MIDI note number based on violin tuning (lines 84-106 are ai
+    // because math)
+    private int calculateMidiNote(int string, int fret) {
+        // MIDI note numbers for open strings (standard violin tuning)
+        // G3 = 55, D4 = 62, A4 = 69, E5 = 76
+        int[] openNotes = { 55, 62, 69, 76 }; // G3, D4, A4, E5
+
+        if (string < 0 || string >= openNotes.length)
+            return -1;
+
+        // apply tuning offset (in semitones)
+        int tunedNote = openNotes[string] + (int) tuningOffsets[string];
+
+        // add fret (each fret = 1 semitone)
+        int finalNote = tunedNote + fret;
+
+        return Math.max(0, Math.min(127, finalNote));
+    }
+
     public void stopNote(int string, int fret) {
         String noteKey = string + "-" + fret;
-        Thread noteThread = activeNotes.get(noteKey);
-        if (noteThread != null && noteThread.isAlive()) {
-            noteThread.interrupt();
+        if (activeNotes.containsKey(noteKey)) {
+            int channel = activeNotes.get(noteKey);
+            if (channels != null && channels[channel] != null) {
+                // calculate note again to send note-off (lines 114-118 are ai)
+                int midiNote = calculateMidiNote(string, fret);
+                if (midiNote >= 0 && midiNote <= 127) {
+                    channels[channel].noteOff(midiNote);
+                }
+            }
             activeNotes.remove(noteKey);
         }
     }
-    
-    // stops EVERYTHING (panic button behavior)
+
     public void stopAllNotes() {
-        for (Thread t : activeNotes.values()) {
-            if (t != null && t.isAlive()) {
-                t.interrupt();
+        if (channels != null) {
+            for (MidiChannel channel : channels) {
+                if (channel != null) {
+                    channel.allNotesOff();
+                    channel.allSoundOff();
+                }
             }
         }
         activeNotes.clear();
-        System.out.println("🛑 PANIC! All notes stopped 🛑");
+        System.out.println("PANIC - all notes stopped");
     }
-    
-    // setters for all the knobs (called by GUI)
+
+    // setters
     public void setVolume(double vol) {
         this.volume = Math.max(0, Math.min(1, vol));
-        System.out.println("🔊 Volume set to " + (int)(volume * 100) + "%");
+        System.out.println("Volume: " + (int) (volume * 100) + "%");
     }
-    
+
     public void setSustain(double sus) {
         this.sustain = Math.max(0, Math.min(1, sus));
-        System.out.println("🎵 Sustain set to " + (int)(sustain * 100) + "%");
+        System.out.println("Sustain: " + (int) (sustain * 100) + "% (MIDI sustain not fully implemented)");
     }
-    
+
     public void setReverb(double rev) {
-        this.reverb = Math.max(0, Math.min(1, rev));
-        System.out.println("🌀 Reverb set to " + (int)(reverb * 100) + "%");
+        // MIDI reverb via controller 91 (lines 137-144 are ai)
+        if (channels != null && channels[0] != null) {
+            int reverbVal = (int) (rev * 127);
+            for (MidiChannel ch : channels) {
+                if (ch != null)
+                    ch.controlChange(91, reverbVal);
+            }
+        }
+        System.out.println("Reverb: " + (int) (rev * 100) + "%");
     }
-    
+
     public void setBitcrush(double crush) {
-        this.bitcrush = Math.max(0, Math.min(1, crush));
-        System.out.println("❓ Bitcrush set to " + (int)(bitcrush * 100) + "% (your ears are bleeding now)");
+        // MIDI doesn't have bitcrush, but we can do something silly
+        // send random pitch bend for "broken" effect
+        if (channels != null && channels[0] != null && crush > 0) {
+            int bendValue = (int) (8192 + (Math.random() - 0.5) * crush * 4000);
+            for (MidiChannel ch : channels) {
+                if (ch != null)
+                    ch.setPitchBend(bendValue);
+            }
+        }
+        System.out.println("Mystery knob: " + (int) (crush * 100) + "% (pitch wobble)");
     }
-    
+
     public void setStringTuning(int string, double offset) {
         if (string >= 0 && string < 4) {
             tuningOffsets[string] = offset;
-            System.out.println("🎻 String " + (string+1) + " tuned to " + (offset > 0 ? "+" : "") + offset + " semitones of horror");
+            String sign = offset > 0 ? "+" : "";
+            System.out.println("String " + (string + 1) + " tuned: " + sign + offset + " semitones");
         }
     }
-    
-    // clean up when closing
+
     public void close() {
-        isRunning = false;
         stopAllNotes();
-        if (line != null) {
-            line.stop();
-            line.close();
+        if (synthesizer != null) {
+            synthesizer.close();
         }
     }
 }
