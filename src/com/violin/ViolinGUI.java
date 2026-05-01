@@ -21,7 +21,6 @@ public class ViolinGUI extends JFrame {
     private SoundEngine soundEngine;
     private BowController bowController;
     private FretboardInput fretboardInput;
-    private MouseTracker mouseTracker;
     
     // GUI Components
     private JPanel mainPanel;
